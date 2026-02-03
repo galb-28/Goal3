@@ -28,7 +28,7 @@ Before installing the project, you need to have:
 ollama pull granite4:latest
 ```
 
-**Note:** The default model is `llama3.2:3b`. You can use a different model by setting the `MODEL_NAME` environment variable (see Configuration section).
+**Note:** The default model is `granite4:latest`. You can use a different model by setting the `MODEL_NAME` environment variable (see Configuration section).
 
 ### Installing FFmpeg (macOS)
 
@@ -83,7 +83,7 @@ Create a `.env` file in the project root directory (optional):
 ```bash
 # Model Configuration (optional - defaults shown)
 MODEL_PROVIDER=ollama
-MODEL_NAME=llama3.2:3b
+MODEL_NAME=granite4:latest
 
 # Other optional configurations
 # OPENAI_API_KEY=your_key_here  # If using OpenAI models
