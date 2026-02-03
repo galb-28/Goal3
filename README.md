@@ -1,5 +1,178 @@
 # Medical AI Assistant - Proof of Concept
 
+A voice-enabled medical AI assistant built with LangGraph, Streamlit, and Ollama. This proof-of-concept demonstrates an intelligent agent that can help with medical information retrieval, appointment scheduling, and general health queries.
+
+## Features
+
+- 🎤 Voice input support with Whisper STT
+- 🤖 LangGraph-powered agent with tool use
+- 🏥 Medical database integration
+- 💬 Interactive chat interface
+- 🔊 Text-to-speech responses
+
+## Prerequisites
+
+Before installing the project, you need to have:
+
+1. **Python 3.8+** installed on your system
+2. **Ollama** installed and running
+3. **FFmpeg** (for audio processing)
+
+### Installing Ollama
+
+1. Visit [https://ollama.ai](https://ollama.ai) and download Ollama for your operating system
+2. Install Ollama following the instructions for your platform
+3. Once installed, pull the required model:
+
+```bash
+ollama pull granite4:latest
+```
+
+**Note:** The default model is `llama3.2:3b`. You can use a different model by setting the `MODEL_NAME` environment variable (see Configuration section).
+
+### Installing FFmpeg (macOS)
+
+```bash
+brew install ffmpeg
+```
+
+For other operating systems, visit [https://ffmpeg.org/download.html](https://ffmpeg.org/download.html)
+
+## Installation
+
+1. **Clone the repository** (or navigate to the project directory):
+
+```bash
+cd /path/to/Goal3
+```
+
+2. **Create a virtual environment**:
+
+```bash
+python3 -m venv venv
+```
+
+3. **Activate the virtual environment**:
+
+On macOS/Linux:
+```bash
+source venv/bin/activate
+```
+
+On Windows:
+```bash
+venv\Scripts\activate
+```
+
+4. **Install required dependencies**:
+
+```bash
+pip install -r requirements.txt
+```
+
+5. **Set up the database** (optional):
+
+```bash
+python src/database/init_db.py
+```
+
+## Configuration
+
+Create a `.env` file in the project root directory (optional):
+
+```bash
+# Model Configuration (optional - defaults shown)
+MODEL_PROVIDER=ollama
+MODEL_NAME=llama3.2:3b
+
+# Other optional configurations
+# OPENAI_API_KEY=your_key_here  # If using OpenAI models
+```
+
+## Running the Application
+
+1. **Make sure Ollama is running** (it should start automatically after installation, or run `ollama serve`)
+
+2. **Activate your virtual environment** (if not already activated):
+
+```bash
+source venv/bin/activate  # macOS/Linux
+# or
+venv\Scripts\activate  # Windows
+```
+
+3. **Launch the Streamlit app**:
+
+```bash
+streamlit run app.py
+```
+
+Or use the quick start script:
+
+```bash
+python start.py
+```
+
+4. **Open your browser** to the URL shown in the terminal (typically `http://localhost:8501`)
+
+## Usage
+
+1. Click the microphone button to record your voice input
+2. Or type your question in the chat input
+3. The AI assistant will process your query and respond with relevant information
+4. View the conversation history in the sidebar
+
+## Project Structure
+
+```
+Goal3/
+├── app.py                  # Main Streamlit application
+├── start.py               # Quick start script
+├── requirements.txt       # Python dependencies
+├── src/
+│   ├── agent/            # LangGraph agent implementation
+│   ├── database/         # Database models and initialization
+│   ├── tools/            # Medical tools for the agent
+│   └── utils/            # Utility functions (LLM, STT)
+├── data/                 # Data files
+└── scripts/              # Helper scripts
+```
+
+## Troubleshooting
+
+### Ollama Connection Issues
+
+If you see errors about connecting to Ollama:
+- Make sure Ollama is running: `ollama serve`
+- Verify the model is downloaded: `ollama list`
+- Pull the model if needed: `ollama pull llama3.2:3b`
+
+### Audio Recording Issues
+
+If audio recording doesn't work:
+- Make sure FFmpeg is installed
+- Check browser permissions for microphone access
+- Try refreshing the page
+
+### Package Installation Issues
+
+If you encounter installation errors:
+- Make sure you're using Python 3.8 or higher: `python --version`
+- Upgrade pip: `pip install --upgrade pip`
+- Try installing packages individually if bulk installation fails
+
+## Deactivating the Virtual Environment
+
+When you're done, deactivate the virtual environment:
+
+```bash
+deactivate
+```
+
+## License
+
+This is a proof-of-concept project for demonstration purposes.
+
 A demo application showcasing LLM integration in a medical context with voice input, SQL database queries, and an intelligent multi-agent system inspired by [ClinicalAgent (arXiv:2404.14777)](https://arxiv.org/abs/2404.14777).
 
 ## Features
