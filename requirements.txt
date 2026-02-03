@@ -1,0 +1,19 @@
+# Core dependencies
+streamlit
+langgraph
+langchain
+langchain-community
+
+# LLM and AI
+litellm
+openai-whisper
+
+# Audio processing
+soundfile
+sounddevice
+numpy
+pydub
+
+# UI and utilities
+python-dotenv
+audio-recorder-streamlit
