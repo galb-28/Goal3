@@ -107,12 +107,6 @@ venv\Scripts\activate  # Windows
 streamlit run app.py
 ```
 
-Or use the quick start script:
-
-```bash
-python start.py
-```
-
 4. **Open your browser** to the URL shown in the terminal (typically `http://localhost:8501`)
 
 ## Usage
@@ -145,7 +139,7 @@ Goal3/
 If you see errors about connecting to Ollama:
 - Make sure Ollama is running: `ollama serve`
 - Verify the model is downloaded: `ollama list`
-- Pull the model if needed: `ollama pull llama3.2:3b`
+- Pull the model if needed: `granite4:latest`
 
 ### Audio Recording Issues
 
@@ -282,7 +276,7 @@ Edit `.env` to switch providers:
 **Local (Ollama - default)**:
 ```env
 MODEL_PROVIDER=ollama
-MODEL_NAME=llama3.2:3b
+MODEL_NAME=granite4:latest
 ```
 
 **OpenAI**:
