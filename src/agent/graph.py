@@ -112,16 +112,7 @@ class MedicalAgent:
 
         # Assess plan complexity
         complexity = self._assess_plan_complexity(user_query)
-        # Special-case: cohort / condition queries (e.g., "list all patients with diabetes")
-        # should be handled by the simple planner (search_by_condition) rather than
-        # invoking the LLM detailed planner. This avoids unnecessary LLM calls and
-        # prevents timeouts when the query is a straightforward cohort search.
-        q_lower = user_query.lower()
-        cohort_triggers = ["list all", "all patients", "patients with", "who has", "find all"]
-        is_cohort_query = any(trigger in q_lower for trigger in cohort_triggers)
-
-        if is_cohort_query:
-            complexity = "simple"
+        # Keep simple planning for straightforward retrieval queries
 
         if complexity in ["complex", "moderate"]:
             # Use LLM-powered detailed planning for complex tasks
@@ -156,40 +147,29 @@ class MedicalAgent:
         plan: List[Dict[str, Any]] = []
         q = user_query.lower()
 
-        # Start with identity resolution when patient-specific info may be asked.
-        # Check for common patient-related patterns
+        # Start with identity resolution when person-specific info may be asked.
+        # Check for common person-related patterns
         search_patterns = ["search", "find", "look for", "who is", "locate"]
         has_search = any(pattern in q for pattern in search_patterns)
-        has_patient_keyword = "patient" in q
+        has_person_keyword = "person" in q or "patient" in q
         # Check for capitalized names (likely patient names)
         import re
         has_names = bool(re.search(r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b', user_query))
         
-        patient_related = has_patient_keyword or q.strip().isdigit() or (has_search and has_names)
-        
-        if patient_related and "search_patients" in self.tools_dict:
-            plan.append({"task": "identity", "description": "Resolve patient identity (name or ID)."})
+        person_related = has_person_keyword or q.strip().isdigit() or (has_search and has_names)
+
+        if person_related and "search_persons" in self.tools_dict:
+            plan.append({"task": "identity", "description": "Resolve person identity (name, ID, or ext_ref)."})
 
         # Add specialist tasks based on query intent (only if tool is enabled).
-        if "medication" in q and "get_patient_medications" in self.tools_dict:
-            plan.append({"task": "medications", "description": "Retrieve patient medications."})
-        if ("lab" in q or "test result" in q) and "get_lab_results" in self.tools_dict:
-            plan.append({"task": "labs", "description": "Retrieve patient lab results."})
-        if "appointment" in q and "get_appointments" in self.tools_dict:
-            plan.append({"task": "appointments", "description": "Retrieve patient appointments."})
-        if ("vital" in q or "blood pressure" in q or "heart rate" in q) and "get_vital_signs" in self.tools_dict:
-            plan.append({"task": "vitals", "description": "Retrieve patient vital signs."})
-        
-        # Check for cohort queries (searching patients by condition)
-        is_cohort_query = any(w in q for w in ["list all", "all patients", "who has", "patients with", "with ", "find all"])
-        has_condition_keywords = ("medical history" in q or "diagnosis" in q or "condition" in q)
-        
-        if is_cohort_query and "search_by_condition" in self.tools_dict:
-            # This is a cohort query - search for patients with a condition
-            plan.append({"task": "cohort", "description": "Search patients by condition."})
-        elif has_condition_keywords and "get_medical_history" in self.tools_dict:
-            # This is asking for a specific patient's medical history
-            plan.append({"task": "history", "description": "Retrieve patient medical history."})
+        if ("encounter" in q or "admission" in q or "discharge" in q or "visit" in q) and "get_person_encounters" in self.tools_dict:
+            plan.append({"task": "encounters", "description": "Retrieve person encounters."})
+        if ("monitor message" in q or "monitor" in q or "message" in q) and "get_monitor_messages" in self.tools_dict:
+            plan.append({"task": "monitor_messages", "description": "Retrieve monitor messages for an encounter."})
+        if ("observation" in q or "vital" in q or "blood pressure" in q or "heart rate" in q or "oxygen" in q or "temperature" in q) and "get_encounter_observations" in self.tools_dict:
+            plan.append({"task": "observations", "description": "Retrieve encounter observations."})
+        if ("alarm" in q or "alert" in q or "warning" in q) and "get_encounter_alarms" in self.tools_dict:
+            plan.append({"task": "alarms", "description": "Retrieve encounter alarms."})
 
         if not plan:
             # Default to answer directly (no tools).
@@ -343,13 +323,11 @@ class MedicalAgent:
 
             # Map tasks to tools
             tool_mapping = {
-                "identity": "search_patients",
-                "medications": "get_patient_medications",
-                "labs": "get_lab_results",
-                "appointments": "get_appointments",
-                "vitals": "get_vital_signs",
-                "history": "get_medical_history",
-                "cohort": "search_by_condition"
+                "identity": "search_persons",
+                "encounters": "get_person_encounters",
+                "monitor_messages": "get_monitor_messages",
+                "observations": "get_encounter_observations",
+                "alarms": "get_encounter_alarms"
             }
             
             tool_name = tool_mapping.get(task)
@@ -374,18 +352,16 @@ class MedicalAgent:
             })
             
             # Create a prompt asking LLM to extract the right parameter
-            tool_prompt = f"""You are extracting parameters for a medical database tool.
+            tool_prompt = f"""You are extracting parameters for a monitoring database tool.
 
 Tool: {tool.name}
 Description: {tool.description}
 User Query: {query}
 
 Based on the query, what is the exact parameter value needed for this tool?
-- For search_patients: provide the patient name or ID
-- For get_patient_medications/lab_results/appointments/vitals/history: provide patient name or ID  
-- For search_by_condition: provide ONLY the medical condition name (e.g., "diabetes", "hypertension", "asthma") - NOT "patients with diabetes" or "all patients with diabetes"
-
-CRITICAL: For search_by_condition, extract ONLY the condition name, removing phrases like "patients with", "all", "list", etc.
+- For search_persons: provide the person name, ID, or ext_ref
+- For get_person_encounters: provide a person name, ID, or ext_ref
+- For get_monitor_messages/get_encounter_observations/get_encounter_alarms: provide the encounter ID or monitor_ext_ref (or a person name/ID if needed)
 
 Respond with ONLY the parameter value, no explanation, no quotes."""
 
@@ -398,12 +374,12 @@ Respond with ONLY the parameter value, no explanation, no quotes."""
                 print(f"DEBUG: Tool={tool_name}, Extracted param={param_value}")
                 
                 # Determine the parameter name from tool's args_schema
-                if tool_name == "search_patients":
+                if tool_name == "search_persons":
                     param_name = "query"
-                elif tool_name == "search_by_condition":
-                    param_name = "condition"
+                elif tool_name == "get_person_encounters":
+                    param_name = "person_identifier"
                 else:
-                    param_name = "patient_identifier"
+                    param_name = "encounter_identifier"
                 
                 # Invoke the tool with proper parameter name
                 result = tool.invoke({param_name: param_value})
@@ -453,40 +429,30 @@ Respond with ONLY the parameter value, no explanation, no quotes."""
         tool_calls = []
         
         # Pattern matching for common queries
-        if any(word in user_query for word in ["search", "find", "look for", "who is"]) and "patient" in user_query:
-            # Extract patient name or ID
+        if any(word in user_query for word in ["search", "find", "look for", "who is"]) and any(w in user_query for w in ["person", "patient"]):
             query_text = messages[-1]["content"]
-            tool_calls.append({"tool_name": "search_patients", "query": query_text})
-            
-        elif "medication" in user_query:
-            # Extract patient identifier
+            tool_calls.append({"tool_name": "search_persons", "query": query_text})
+
+        elif any(word in user_query for word in ["encounter", "admission", "discharge", "visit"]):
             query_text = messages[-1]["content"]
-            tool_calls.append({"tool_name": "get_patient_medications", "query": query_text})
-            
-        elif "lab result" in user_query or "test result" in user_query:
+            tool_calls.append({"tool_name": "get_person_encounters", "query": query_text})
+
+        elif any(word in user_query for word in ["monitor message", "monitor", "message"]):
             query_text = messages[-1]["content"]
-            tool_calls.append({"tool_name": "get_lab_results", "query": query_text})
-            
-        elif "appointment" in user_query:
+            tool_calls.append({"tool_name": "get_monitor_messages", "query": query_text})
+
+        elif any(word in user_query for word in ["observation", "vital", "blood pressure", "heart rate", "oxygen", "temperature"]):
             query_text = messages[-1]["content"]
-            tool_calls.append({"tool_name": "get_appointments", "query": query_text})
-            
-        elif "vital sign" in user_query or "blood pressure" in user_query or "heart rate" in user_query:
+            tool_calls.append({"tool_name": "get_encounter_observations", "query": query_text})
+
+        elif any(word in user_query for word in ["alarm", "alert", "warning"]):
             query_text = messages[-1]["content"]
-            tool_calls.append({"tool_name": "get_vital_signs", "query": query_text})
-            
-        elif "medical history" in user_query or "condition" in user_query or "diagnosis" in user_query:
+            tool_calls.append({"tool_name": "get_encounter_alarms", "query": query_text})
+
+        # If any person ID or name is mentioned, try to search
+        elif any(word in user_query for word in ["person", "patient", "john", "sarah", "michael", "emily", "david"]) or user_query.strip().isdigit():
             query_text = messages[-1]["content"]
-            # Check if searching by condition or patient
-            if any(word in user_query for word in ["with", "have", "has"]):
-                tool_calls.append({"tool_name": "search_by_condition", "query": query_text})
-            else:
-                tool_calls.append({"tool_name": "get_medical_history", "query": query_text})
-        
-        # If any patient ID or name is mentioned, try to search
-        elif any(word in user_query for word in ["patient", "john", "sarah", "michael", "emily", "david"]) or user_query.strip().isdigit():
-            query_text = messages[-1]["content"]
-            tool_calls.append({"tool_name": "search_patients", "query": query_text})
+            tool_calls.append({"tool_name": "search_persons", "query": query_text})
         
         return {
             "needs_clarification": False,
@@ -508,16 +474,12 @@ Respond with ONLY the parameter value, no explanation, no quotes."""
                     tool_func = self.tools_dict[tool_name]["function"]
                     
                     # Extract relevant info from query
-                    # For patient searches, try to extract name or ID
-                    if tool_name == "search_patients":
+                    # For person searches, try to extract name or ID
+                    if tool_name == "search_persons":
                         query = self._extract_patient_identifier(query)
-                    
-                    # For condition searches, extract the condition name
-                    elif tool_name == "search_by_condition":
-                        query = self._extract_condition_from_query(query)
-                    
-                    # For other tools, try to extract patient identifier
-                    elif tool_name in ["get_patient_medications", "get_medical_history", "get_lab_results", "get_appointments", "get_vital_signs"]:
+
+                    # For encounter tools, try to extract encounter ID or person identifier
+                    elif tool_name in ["get_person_encounters", "get_monitor_messages", "get_encounter_observations", "get_encounter_alarms"]:
                         query = self._extract_patient_identifier(query)
                     
                     result = tool_func(query)
@@ -594,7 +556,7 @@ Respond with ONLY the parameter value, no explanation, no quotes."""
                 "(database/tool lookups). Synthesize them into a clear, concise, helpful answer.\n\n"
                 "IMPORTANT GUIDELINES:\n"
                 "- If data was found successfully, present it clearly without asking unnecessary follow-up questions.\n"
-                "- If a search returned 'No patients found' or similar, inform the user directly.\n"
+                "- If a search returned 'No persons found' or similar, inform the user directly.\n"
                 "- Only ask for clarification if there are truly multiple matches or ambiguous results.\n"
                 "- If a partial name search succeeds, present the results confidently.\n"
                 "- This is demo data for testing purposes."
@@ -778,34 +740,33 @@ Respond with ONLY the parameter value, no explanation, no quotes."""
 
 
     def _extract_patient_identifier(self, query: str) -> str:
-        """Extract patient name or ID from a query string.
+        """Extract person name, ID, or encounter reference from a query string.
         
         Args:
             query: The query string to extract from
             
         Returns:
-            Extracted patient identifier (name or ID)
+            Extracted person or encounter identifier
         """
         import re
         
-        # First, check for "patient X" pattern (ID)
-        match = re.search(r'patient\s+(?:id\s+)?(\d+)', query.lower())
+        # First, check for explicit person or encounter IDs
+        match = re.search(r'(?:person|patient|encounter)\s+(?:id\s+)?(\d+)', query.lower())
         if match:
             return match.group(1)
         
         # Common query prefixes to remove (more aggressive)
         prefixes_to_remove = [
-            r'^show\s+(?:me\s+)?(?:the\s+)?vital\s+signs?\s+(?:for\s+)?(?:patient\s+)?',
-            r'^get\s+(?:the\s+)?vital\s+signs?\s+(?:for\s+)?(?:patient\s+)?',
-            r'^show\s+(?:me\s+)?(?:the\s+)?lab\s+results?\s+(?:for\s+)?(?:patient\s+)?',
-            r'^get\s+(?:the\s+)?lab\s+results?\s+(?:for\s+)?(?:patient\s+)?',
-            r'^show\s+(?:me\s+)?(?:the\s+)?appointments?\s+(?:for\s+)?(?:patient\s+)?',
-            r'^get\s+(?:the\s+)?appointments?\s+(?:for\s+)?(?:patient\s+)?',
-            r'^show\s+(?:me\s+)?(?:the\s+)?medical\s+history\s+(?:for\s+)?(?:patient\s+)?',
-            r'^get\s+(?:the\s+)?medical\s+history\s+(?:for\s+)?(?:patient\s+)?',
-            r'^what\s+medications?\s+is\s+(?:patient\s+)?',
-            r'^search\s+(?:for\s+)?(?:patient\s+)?',
-            r'^find\s+(?:patient\s+)?',
+            r'^show\s+(?:me\s+)?(?:the\s+)?observations?\s+(?:for\s+)?(?:person|patient|encounter)?\s*',
+            r'^get\s+(?:the\s+)?observations?\s+(?:for\s+)?(?:person|patient|encounter)?\s*',
+            r'^show\s+(?:me\s+)?(?:the\s+)?alarms?\s+(?:for\s+)?(?:person|patient|encounter)?\s*',
+            r'^get\s+(?:the\s+)?alarms?\s+(?:for\s+)?(?:person|patient|encounter)?\s*',
+            r'^show\s+(?:me\s+)?(?:the\s+)?encounters?\s+(?:for\s+)?(?:person|patient)?\s*',
+            r'^get\s+(?:the\s+)?encounters?\s+(?:for\s+)?(?:person|patient)?\s*',
+            r'^show\s+(?:me\s+)?(?:the\s+)?monitor\s+messages?\s+(?:for\s+)?(?:encounter|person|patient)?\s*',
+            r'^get\s+(?:the\s+)?monitor\s+messages?\s+(?:for\s+)?(?:encounter|person|patient)?\s*',
+            r'^search\s+(?:for\s+)?(?:person|patient)?\s*',
+            r'^find\s+(?:person|patient)?\s*',
             r'^list\s+(?:all\s+)?',
         ]
         
@@ -815,8 +776,7 @@ Respond with ONLY the parameter value, no explanation, no quotes."""
         
         # Remove common suffixes
         suffixes_to_remove = [
-            r'\s+taking\??$',
-            r'\s+with\s+\w+$',  # "patients with diabetes"
+            r'\s+details\??$'
         ]
         
         for suffix in suffixes_to_remove:
@@ -935,31 +895,40 @@ Required JSON structure:
     "estimated_steps": 2
 }}
 
-Example for "pull up all patients vital signs":
+Example for "show observations for John Smith":
 {{
     "steps": [
         {{
-            "id": "identify_patients",
-            "task": "get_all_patients",
-            "description": "Get list of all patients in the system",
-            "tool_name": "search_patients",
-            "parameters": {{"query": "all patients"}},
+            "id": "identify_person",
+            "task": "resolve_person",
+            "description": "Find the person by name",
+            "tool_name": "search_persons",
+            "parameters": {{"query": "John Smith"}},
             "dependencies": [],
             "required": true
         }},
         {{
-            "id": "collect_vitals",
-            "task": "get_vitals_batch",
-            "description": "Retrieve vital signs for each patient",
-            "tool_name": "get_vital_signs",
-            "parameters": {{"query": "batch retrieval"}},
-            "dependencies": ["identify_patients"],
+            "id": "get_encounters",
+            "task": "fetch_encounters",
+            "description": "Retrieve encounters for the person",
+            "tool_name": "get_person_encounters",
+            "parameters": {{"person_identifier": "John Smith"}},
+            "dependencies": ["identify_person"],
+            "required": true
+        }},
+        {{
+            "id": "collect_observations",
+            "task": "fetch_observations",
+            "description": "Retrieve observations for the latest encounter",
+            "tool_name": "get_encounter_observations",
+            "parameters": {{"encounter_identifier": "John Smith"}},
+            "dependencies": ["get_encounters"],
             "required": true
         }}
     ],
-    "complexity": "complex",
-    "rationale": "This requires systematic retrieval of data for multiple patients",
-    "estimated_steps": 2
+    "complexity": "moderate",
+    "rationale": "Requires person lookup, encounter retrieval, then observations",
+    "estimated_steps": 3
 }}
 """
         

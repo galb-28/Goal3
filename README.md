@@ -148,6 +148,8 @@ If audio recording doesn't work:
 - Check browser permissions for microphone access
 - Try refreshing the page
 
+If you see `Error transcribing audio: [Errno 2] No such file or directory: 'ffmpeg'`, install FFmpeg and restart the app.
+
 ### Package Installation Issues
 
 If you encounter installation errors:
@@ -249,25 +251,24 @@ The app will open in your browser at `http://localhost:8501`
 
 ### Tool Configuration
 
-Use the sidebar to enable/disable medical tools:
-- **Search Patients**: Look up patients by name or MRN
-- **Get Medications**: Retrieve current medication lists with NDC codes
-- **Get Medical History**: Access diagnosis history with ICD-10-CM codes
-- **Get Lab Results**: View laboratory results with LOINC codes
-- **Get Appointments**: Check scheduled appointments
-- **Get Vital Signs**: Retrieve recent vital sign measurements
-- **Search by Condition**: Find patients by ICD-10 diagnosis code
+Use the sidebar to enable/disable monitoring tools:
+- **Search Persons**: Look up persons by name, ID, or ext_ref
+- **Get Encounters**: Retrieve admissions, discharges, and outcomes
+- **Get Monitor Messages**: View monitor message streams by encounter
+- **Get Observations**: Retrieve vitals and clinical assessments
+- **Get Alarms**: View alarm events and states
 
 The agent will automatically plan queries based on available tools and inform you if a disabled tool is needed.
 
 ## Example Queries
 
 Try asking:
-- "What medications is Linda Davis taking?" (Returns: Amlodipine besylate 5mg, Albuterol sulfate HFA 90mcg)
-- "Show me lab results for William Martinez" (Displays: Cholesterol, HbA1c, TSH with LOINC codes)
-- "What is Maria Wilson's medical history?" (Shows: Osteoarthritis [ICD-10: M17.9], Hypertension [I10], GERD [K21.9])
-- "Schedule an appointment for patient ID 5"
-- "List all patients with diabetes" (Search by ICD-10 code E11.9)
+- "Find Michael Anderson"
+- "Show encounters for Linda Davis"
+- "Show observations for encounter 1"
+- "Get alarms for encounter 1"
+- "Show monitor messages for encounter 1"
+- "Find person PER12345"
 
 ## Switching LLM Providers
 

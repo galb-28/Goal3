@@ -83,12 +83,12 @@ class SimpleMedicalAgent:
             handle_parsing_errors=True,
             max_iterations=10,
             agent_kwargs={
-                "prefix": """You are a helpful medical assistant with access to a patient database.
+                "prefix": """You are a helpful medical assistant with access to a monitoring database.
 
 Answer the following questions as best you can. You have access to the following tools:""",
                 "suffix": """Important notes:
-- When using search_by_condition, pass just the condition name (e.g., "diabetes", not "patients with diabetes")
-- Medical conditions can be searched by common names (diabetes, hypertension) or ICD-10 codes (E11, I10)
+- For person lookup, use search_persons with a name, ID, or ext_ref.
+- For encounter-related data, use encounter IDs when possible (from get_person_encounters).
 
 Begin!
 
